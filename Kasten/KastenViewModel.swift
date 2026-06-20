@@ -35,6 +35,12 @@ final class KastenViewModel: ObservableObject {
 
     @Published var errorMessage: String?
 
+    // MARK: - ブロック境界（OSC 133）
+    
+    /// 検出したコマンドブロックの区切り位置（出力テキストの行数ベースで後で使う）。
+    /// まずは動作確認のためイベントを受け取れることだけ確認する。
+    @Published var blockCount: Int = 0
+
     // MARK: - コマンドサジェスト
 
     func requestSuggestion() async {
