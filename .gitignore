@@ -1,16 +1,7 @@
-# Xcode のユーザー固有設定（Git管理不要）
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
 *.userdata
-
-# 履歴やキャッシュ
 .DS_Store
 build/
 DerivedData/
-
-# Swift Package Manager のビルドキャッシュ
 .build/
-
-# project.pbxproj はここには絶対に入れない！
-# Package.resolved をどうしても除外したい場合だけ、以下を有効にする（非推奨）
-# Package.resolved
