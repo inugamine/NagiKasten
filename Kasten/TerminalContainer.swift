@@ -60,8 +60,6 @@ final class BlockSeparatorOverlay: NSView {
     struct Separator {
         let yFromTop: CGFloat
         let isError: Bool
-        let directory: String
-        let branch: String
     }
 
     var separators: [Separator] = [] {
@@ -76,26 +74,11 @@ final class BlockSeparatorOverlay: NSView {
     // クリックなどのイベントは下のターミナルに素通しする
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    /// フルパスのホームディレクトリを ~ に短縮する。
-    private func abbreviateHome(_ path: String) -> String {
-        let home = NSHomeDirectory()
-        if path == home { return "~" }
-        if path.hasPrefix(home + "/") {
-            return "~" + path.dropFirst(home.count)
-        }
-        return path
-    }
-
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.saveGState()
         let rightX = max(0, bounds.width - rightInset)
-
-        // ラベル用のフォントと色
-        let labelFont = NSFont.systemFont(ofSize: 10, weight: .medium)
-        let dirColor = NSColor.secondaryLabelColor
-        let branchColor = NSColor.tertiaryLabelColor
 
         for sep in separators {
             // AppKit は左下原点なので、上端からの距離を下端からに変換
@@ -109,25 +92,6 @@ final class BlockSeparatorOverlay: NSView {
             context.move(to: CGPoint(x: 0, y: yFlipped))
             context.addLine(to: CGPoint(x: rightX, y: yFlipped))
             context.strokePath()
-
-            // 線の下に「📁 ~/Desktop 🌿 main」を描く。
-            // ディレクトリもブランチも空なら何も描かない。
-            let dir = sep.directory.isEmpty ? "" : "📁 " + abbreviateHome(sep.directory)
-            let branch = sep.branch.isEmpty ? "" : "🌿 " + sep.branch
-            let label = [dir, branch].filter { !$0.isEmpty }.joined(separator: "  ")
-            guard !label.isEmpty else { continue }
-
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: labelFont,
-                .foregroundColor: branch.isEmpty ? dirColor : dirColor,
-            ]
-            let attributed = NSAttributedString(string: label, attributes: attrs)
-            // 線のすぐ下（上端からの距離 yFromTop の少し下）にベースラインを置く。
-            // AppKit 座標なので、線の y から文字高さ分だけ下げた位置に描く。
-            let textHeight = labelFont.ascender - labelFont.descender
-            let textY = yFlipped - textHeight - 1
-            attributed.draw(at: CGPoint(x: 2, y: textY))
-            _ = branchColor // 予約（将来ブランチを別色にする場合に使用）
         }
         context.restoreGState()
     }
@@ -145,8 +109,8 @@ final class KastenTerminalView: LocalProcessTerminalView {
     var onAIQuery: ((String) -> Void)?
 
     /// コマンド境界の「スクロール不変の絶対行」を記録する。
-    /// 各要素は (絶対行, 直前コマンドの終了コード, ディレクトリ, ブランチ)。
-    private var blockBoundaries: [(absoluteRow: Int, exitCode: Int?, directory: String, branch: String)] = []
+    /// 各要素は (絶対行, 直前コマンドの終了コード)。
+    private var blockBoundaries: [(absoluteRow: Int, exitCode: Int?)] = []
     private let maxBoundaries = 500
 
     /// 直前の D（コマンド終了）の終了コードを一時保持する。
@@ -154,13 +118,8 @@ final class KastenTerminalView: LocalProcessTerminalView {
     private var pendingExitCode: Int?
 
     /// 最初のプロンプトをもう処理したか。
-    /// 起動直後の初回プロンプトにも線と情報を出すためのフラグ。
+    /// 起動直後の初回プロンプトにも線を出すためのフラグ。
     private var hasDrawnFirstPrompt = false
-
-    /// 最新のカレントディレクトリと Git ブランチ（OSC 633 で通知される）。
-    /// プロンプト開始(A)で境界を記録するとき、この値をセットで保存する。
-    private var currentDirectory: String = ""
-    private var currentBranch: String = ""
 
     /// ユーザーが現在の行に打ち込んだ内容を、文字単位で持つミニ行エディタ。
     /// 日本語1文字も1要素として扱う。カーソル位置(cursorIndex)を持つことで、
@@ -284,18 +243,9 @@ final class KastenTerminalView: LocalProcessTerminalView {
             // 線はここでは引かず、終了コードだけ覚えておく
             pendingExitCode = exitCode
 
-        case .directoryChanged(let dir):
-            // 最新のディレクトリを覚えておく（promptStart でスナップショットされる）
-            currentDirectory = dir
-
-        case .gitBranchChanged(let branch):
-            // 最新のブランチを覚えておく
-            currentBranch = branch
-
         case .promptStart:
             // 原則、直前に D（コマンド終了）が来ている場合に線を引く。
             // ただし、起動直後の「初回プロンプト」だけは D が無くても線を引く。
-            // （現在地のディレクトリ・ブランチを起動時から見せるため）
             let isFirstPrompt = !hasDrawnFirstPrompt
             guard pendingExitCode != nil || isFirstPrompt else { return }
             hasDrawnFirstPrompt = true
@@ -312,10 +262,7 @@ final class KastenTerminalView: LocalProcessTerminalView {
             } else {
                 absoluteRow = topRow + cursorY - 1
             }
-            blockBoundaries.append((absoluteRow: absoluteRow,
-                                    exitCode: pendingExitCode,
-                                    directory: currentDirectory,
-                                    branch: currentBranch))
+            blockBoundaries.append((absoluteRow: absoluteRow, exitCode: pendingExitCode))
             if blockBoundaries.count > maxBoundaries {
                 blockBoundaries.removeFirst(blockBoundaries.count - maxBoundaries)
             }
@@ -361,10 +308,7 @@ final class KastenTerminalView: LocalProcessTerminalView {
             guard visibleRow >= 0, visibleRow < rows else { continue }
             let yFromTop = CGFloat(visibleRow + 1) * rowHeight
             let isError = (boundary.exitCode ?? 0) != 0
-            result.append(.init(yFromTop: yFromTop,
-                                isError: isError,
-                                directory: boundary.directory,
-                                branch: boundary.branch))
+            result.append(.init(yFromTop: yFromTop, isError: isError))
         }
         overlay.separators = result
     }

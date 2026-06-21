@@ -36,7 +36,6 @@ enum ShellIntegrationSetup {
 
         # ディレクトリ・ブランチはプロンプト開始(A)より先に送る。
         # A で区切り線を引く瞬間に、最新の値が揃っているようにするため。
-        # （逆にすると、線に添える情報が１テンポ遅れる）
 
         # カレントディレクトリを通知（VSCode 互換の OSC 633;P;Cwd=...）
         print -n "\e]633;P;Cwd=${PWD}\a"
@@ -60,9 +59,42 @@ enum ShellIntegrationSetup {
     __kasten_preexec() {
         print -n "\e]133;C\a"
     }
-    
+
+    # Kasten 専用のプロンプトに上書きする。
+    # お前の設定（Starship 初期化）を source した後にこのスクリプトが読まれるので、
+    # このフックは Starship の precmd より後に登録される＝後に実行される。
+    # precmd_functions 配列は先頭から順に実行されるため、最後に走るこのフックの
+    # PROMPT 上書きが最終的に勝つ。これで Starship が描いた後に Kasten 用へ差し替える。
+    # ※ お前の本物の設定ファイルは一切書き換えていない（一時環境の中だけの話）。
+    #
+    # 2行構成にして、1行目に現在地（ディレクトリ・ブランチ）、2行目に入力記号を置く。
+    # こうすると区切り線と被らず、情報は zsh が描くので位置ズレも起きない。
+    __kasten_prompt() {
+        # フルパス。ホームディレクトリは ~ に短縮する。
+        local __kasten_dir="${PWD/#$HOME/~}"
+
+        # Git ブランチ（リポジトリ内のみ）。
+        local __kasten_branch=""
+        if command git rev-parse --is-inside-work-tree &>/dev/null; then
+            __kasten_branch=$(command git symbolic-ref --short HEAD 2>/dev/null)
+            if [[ -z "$__kasten_branch" ]]; then
+                __kasten_branch=$(command git rev-parse --short HEAD 2>/dev/null)
+            fi
+        fi
+
+        # 1行目: 📁 ディレクトリ （ブランチがあれば） 🌿 ブランチ
+        local __kasten_line1="%F{cyan}📁 ${__kasten_dir}%f"
+        if [[ -n "$__kasten_branch" ]]; then
+            __kasten_line1+="  %F{magenta}🌿 ${__kasten_branch}%f"
+        fi
+
+        # 1行目（情報）＋改行＋2行目（入力記号）
+        PROMPT="${__kasten_line1}"$'\n'"%F{green}❯%f "
+    }
+
     add-zsh-hook precmd __kasten_precmd
     add-zsh-hook preexec __kasten_preexec
+    add-zsh-hook precmd __kasten_prompt
     """#
     
     /// 一時ディレクトリに .zshrc と統合スクリプトを書き出し、ZDOTDIR を返す。
