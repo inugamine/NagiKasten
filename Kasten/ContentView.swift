@@ -11,6 +11,8 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var viewModel = KastenViewModel()
     @StateObject private var bridge = TerminalBridge()
+    /// AI/エラーパネルの実測高さ。ターミナルをこの分だけ持ち上げて被りを防ぐ。
+    @State private var panelHeight: CGFloat = 0
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -26,6 +28,9 @@ struct ContentView: View {
                 .padding(.horizontal, 10)
                 .padding(.bottom, 8)
                 .ignoresSafeArea(edges: [.bottom])
+                // AI/エラーパネルが出ている間は、その高さぶんターミナルを持ち上げて、
+                // 末尾の行がパネルに隠れないようにする（スクロールで全行見えるようにする）。
+                .padding(.bottom, panelHeight)
 
             // オーバーレイ群（下からせり上がる）
             VStack(spacing: 0) {
@@ -44,6 +49,14 @@ struct ContentView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: PanelHeightKey.self, value: proxy.size.height)
+                }
+            )
+        }
+        .onPreferenceChange(PanelHeightKey.self) { height in
+            panelHeight = height
         }
         .onAppear {
             // ターミナルで AI質問と判定された入力を ViewModel へ流す
@@ -79,4 +92,12 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+}
+
+/// AI/エラーパネルの高さを上位ビューへ伝えるための PreferenceKey。
+private struct PanelHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
 }

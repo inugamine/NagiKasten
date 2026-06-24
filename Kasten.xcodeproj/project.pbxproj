@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		F1FC88762FE81DC700D245B3 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = F1FC88752FE81DC700D245B3 /* SwiftTerm */; };
+		F1FC88792FE8225900D245B3 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = F1FC88782FE8225900D245B3 /* SwiftTerm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +28,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F1FC88792FE8225900D245B3 /* SwiftTerm in Frameworks */,
 				F1FC88762FE81DC700D245B3 /* SwiftTerm in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -71,6 +73,7 @@
 			name = Kasten;
 			packageProductDependencies = (
 				F1FC88752FE81DC700D245B3 /* SwiftTerm */,
+				F1FC88782FE8225900D245B3 /* SwiftTerm */,
 			);
 			productName = Kasten;
 			productReference = F11EA4F12FE5B28E00ADA4EA /* Kasten.app */;
@@ -101,7 +104,7 @@
 			mainGroup = F11EA4E82FE5B28E00ADA4EA;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				F1FC88742FE81DC700D245B3 /* XCLocalSwiftPackageReference "../SwiftTerm-fork" */,
+				F1FC88772FE8225900D245B3 /* XCLocalSwiftPackageReference "../SwiftTerm-fork" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F11EA4F22FE5B28E00ADA4EA /* Products */;
@@ -346,7 +349,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		F1FC88742FE81DC700D245B3 /* XCLocalSwiftPackageReference "../SwiftTerm-fork" */ = {
+		F1FC88772FE8225900D245B3 /* XCLocalSwiftPackageReference "../SwiftTerm-fork" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "../SwiftTerm-fork";
 		};
@@ -354,6 +357,10 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		F1FC88752FE81DC700D245B3 /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SwiftTerm;
+		};
+		F1FC88782FE8225900D245B3 /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SwiftTerm;
 		};
