@@ -31,7 +31,7 @@ struct SettingsView: View {
     private var appearanceTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Picker("テーマ", selection: $themeStore.mode) {
+                Picker("テーマ", selection: modeBinding) {
                     ForEach(AppearanceMode.allCases) { mode in
                         Text(mode.label).tag(mode)
                     }
@@ -96,6 +96,17 @@ struct SettingsView: View {
         }
     }
 
+    /// モード選択用のバインディング。選択の反映を次のランループに逃がし、
+    /// ビュー更新中の objectWillChange 発火（"Publishing changes..." 警告）を避ける。
+    private var modeBinding: Binding<AppearanceMode> {
+        Binding(
+            get: { themeStore.mode },
+            set: { newValue in
+                DispatchQueue.main.async { themeStore.mode = newValue }
+            }
+        )
+    }
+
     /// 1 色分の行（ラベル＋カラーピッカー）。
     private func colorRow(_ label: String,
                           _ keyPath: WritableKeyPath<KastenTheme, KastenTheme.RGB>) -> some View {
@@ -113,7 +124,13 @@ struct SettingsView: View {
         Binding(
             get: { Color(nsColor: themeStore.customTheme[keyPath: keyPath].nsColor) },
             set: { newColor in
-                themeStore.customTheme[keyPath: keyPath] = KastenTheme.RGB(nsColor: NSColor(newColor))
+                // ColorPicker はビュー更新中に値を書き戻すことがあり、その場で
+                // store を変更すると "Publishing changes from within view updates" が出る。
+                // 変更を次のランループに逃がして回避する。
+                let rgb = KastenTheme.RGB(nsColor: NSColor(newColor))
+                DispatchQueue.main.async {
+                    themeStore.customTheme[keyPath: keyPath] = rgb
+                }
             }
         )
     }
