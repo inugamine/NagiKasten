@@ -17,7 +17,7 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "F11EA4F02FE5B28E00ADA4EA"
                BuildableName = "NagiKasten.app"
-               BlueprintName = "Kasten"
+               BlueprintName = "NagiKasten"
                ReferencedContainer = "container:Kasten.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -48,7 +48,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "F11EA4F02FE5B28E00ADA4EA"
             BuildableName = "NagiKasten.app"
-            BlueprintName = "Kasten"
+            BlueprintName = "NagiKasten"
             ReferencedContainer = "container:Kasten.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -65,7 +65,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "F11EA4F02FE5B28E00ADA4EA"
             BuildableName = "NagiKasten.app"
-            BlueprintName = "Kasten"
+            BlueprintName = "NagiKasten"
             ReferencedContainer = "container:Kasten.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

@@ -57,9 +57,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		F11EA4F02FE5B28E00ADA4EA /* Kasten */ = {
+		F11EA4F02FE5B28E00ADA4EA /* NagiKasten */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = F11EA4FC2FE5B28E00ADA4EA /* Build configuration list for PBXNativeTarget "Kasten" */;
+			buildConfigurationList = F11EA4FC2FE5B28E00ADA4EA /* Build configuration list for PBXNativeTarget "NagiKasten" */;
 			buildPhases = (
 				F11EA4ED2FE5B28E00ADA4EA /* Sources */,
 				F11EA4EE2FE5B28E00ADA4EA /* Frameworks */,
@@ -72,7 +72,7 @@
 			fileSystemSynchronizedGroups = (
 				F11EA4F32FE5B28E00ADA4EA /* Kasten */,
 			);
-			name = Kasten;
+			name = NagiKasten;
 			packageProductDependencies = (
 				F1FC88752FE81DC700D245B3 /* SwiftTerm */,
 				F1FC88782FE8225900D245B3 /* SwiftTerm */,
@@ -115,7 +115,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				F11EA4F02FE5B28E00ADA4EA /* Kasten */,
+				F11EA4F02FE5B28E00ADA4EA /* NagiKasten */,
 			);
 		};
 /* End PBXProject section */
@@ -295,7 +295,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = inugamine.Kasten;
+				PRODUCT_BUNDLE_IDENTIFIER = inugamine.NagiKasten;
 				PRODUCT_NAME = NagiKasten;
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
@@ -343,7 +343,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = inugamine.Kasten;
+				PRODUCT_BUNDLE_IDENTIFIER = inugamine.NagiKasten;
 				PRODUCT_NAME = NagiKasten;
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
@@ -373,7 +373,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		F11EA4FC2FE5B28E00ADA4EA /* Build configuration list for PBXNativeTarget "Kasten" */ = {
+		F11EA4FC2FE5B28E00ADA4EA /* Build configuration list for PBXNativeTarget "NagiKasten" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				F11EA4FD2FE5B28E00ADA4EA /* Debug */,
