@@ -7,6 +7,7 @@
 
 import Foundation
 import FoundationModels
+import NaturalLanguage
 import Combine
 
 /// Apple Foundation Models をラップしてコマンドサジェストとエラー解析を提供する。
@@ -30,32 +31,78 @@ final class AIService: ObservableObject {
         case .unavailable(let reason):
             switch reason {
             case .deviceNotEligible:
-                return "この Mac は Apple Intelligence に対応していません。"
+                return String(localized: "この Mac は Apple Intelligence に対応していません。")
             case .appleIntelligenceNotEnabled:
-                return "設定から Apple Intelligence を有効にしてください。"
+                return String(localized: "設定から Apple Intelligence を有効にしてください。")
             case .modelNotReady:
-                return "モデルを準備中です。しばらく待ってから再度お試しください。"
+                return String(localized: "モデルを準備中です。しばらく待ってから再度お試しください。")
             @unknown default:
-                return "Apple Intelligence が利用できません。"
+                return String(localized: "Apple Intelligence が利用できません。")
             }
         @unknown default:
-            return "Apple Intelligence が利用できません。"
+            return String(localized: "Apple Intelligence が利用できません。")
         }
     }
 
     // MARK: - 回答言語の決定
 
-    /// AI の回答に使う言語（英語表記の言語名 "Japanese" "German" など）を返す。
-    /// ユーザーが OS で設定している優先言語の先頭をそのまま使う。
-    private static func responseLanguageName() -> String {
-        // Locale.current はアプリがローカライズ対応済みの言語に制限されるため、
-        // UI 翻訳の整備が済む前は OS が ja でも en に丸められてしまう。
-        // preferredLanguages ならアプリのローカライズ状況に関係なく、
-        // ユーザー本来の優先言語（"ja-JP" "de-DE" など）がそのまま取れる。
+    /// OS の優先言語の先頭から言語コード（"ja" "de" など）を取り出す。
+    // Locale.current はアプリがローカライズ対応済みの言語に制限されるため、
+    // preferredLanguages でユーザー本来の優先言語をそのまま取る。
+    private static func preferredLanguageCode() -> String {
         let preferred = Locale.preferredLanguages.first ?? "en"
-        let code = Locale(identifier: preferred).language.languageCode?.identifier ?? "en"
-        // モデルへ渡す言語名は英語表記にする（最も確実に伝わる形）。
-        return Locale(identifier: "en_US").localizedString(forLanguageCode: code) ?? "English"
+        return Locale(identifier: preferred).language.languageCode?.identifier ?? "en"
+    }
+
+    /// 言語コードが Foundation Models のサポート対象ならそのまま、対象外なら "en" を返す。
+    /// サポート一覧はモデル自身から取るので、将来対応言語が増えても自動で追従する。
+    private static func supportedOrEnglish(_ code: String) -> String {
+        let candidate = Locale.Language(identifier: code)
+        let supported = SystemLanguageModel.default.supportedLanguages
+        let isSupported = supported.contains { $0.languageCode == candidate.languageCode }
+        return isSupported ? code : "en"
+    }
+
+    /// 言語コードを英語表記の言語名（"Japanese" "German" など）へ変換する。
+    /// モデルへ渡す言語指定は英語表記が最も確実に伝わる。
+    private static func englishName(forLanguageCode code: String) -> String {
+        Locale(identifier: "en_US").localizedString(forLanguageCode: code) ?? "English"
+    }
+
+    /// エラー解析用：OS の優先言語で回答する（サポート外なら英語）。
+    /// 解析対象はほぼ英語のターミナル出力なので、入力テキストからの言語判定は使わない。
+    private static func responseLanguageName() -> String {
+        englishName(forLanguageCode: supportedOrEnglish(preferredLanguageCode()))
+    }
+
+    /// コマンドサジェスト用：質問文そのものの言語で回答する。
+    /// 判定不能なら OS 優先言語へ、サポート外なら英語へフォールバックする。
+    private static func responseLanguageName(for text: String) -> String {
+        // かな・ハングルは言語をほぼ一意に特定できるので、統計的判定より先に見る。
+        // ターミナルの質問はコマンド名（ラテン文字）が混ざりやすく、
+        // 統計的判定だけだと「git で commit するには？」が英語に倒れてしまう。
+        if text.unicodeScalars.contains(where: { (0x3040...0x30FF).contains($0.value) }) {
+            // ひらがな（U+3040-309F）・カタカナ（U+30A0-30FF）→ 日本語確定
+            return englishName(forLanguageCode: supportedOrEnglish("ja"))
+        }
+        if text.unicodeScalars.contains(where: { (0xAC00...0xD7AF).contains($0.value) }) {
+            // ハングル音節文字（U+AC00-D7AF）→ 韓国語確定
+            return englishName(forLanguageCode: supportedOrEnglish("ko"))
+        }
+
+        let recognizer = NLLanguageRecognizer()
+        // 短い入力での誤判定を減らすため、OS の優先言語をヒントとして与える。
+        var hints: [NLLanguage: Double] = [:]
+        for (index, identifier) in Locale.preferredLanguages.prefix(3).enumerated() {
+            if let code = Locale(identifier: identifier).language.languageCode?.identifier {
+                hints[NLLanguage(rawValue: code)] = 0.4 - Double(index) * 0.1
+            }
+        }
+        recognizer.languageHints = hints
+        recognizer.processString(text)
+
+        let code = recognizer.dominantLanguage?.rawValue ?? preferredLanguageCode()
+        return englishName(forLanguageCode: supportedOrEnglish(code))
     }
 
     // MARK: - エラー解析
@@ -91,7 +138,7 @@ final class AIService: ObservableObject {
     func suggestCommand(from naturalLanguage: String) async throws -> CommandSuggestion {
         guard isAvailable else { throw AIServiceError.modelUnavailable }
 
-        let language = Self.responseLanguageName()
+        let language = Self.responseLanguageName(for: naturalLanguage)
         let instructions = """
         You are an assistant well-versed in the macOS terminal.
         The user describes what they want to do; propose an appropriate shell command to achieve it.
@@ -144,7 +191,7 @@ enum AIServiceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .modelUnavailable:
-            return "Apple Intelligence が利用できません。設定から有効にしてください。"
+            return String(localized: "Apple Intelligence が利用できません。設定から有効にしてください。")
         }
     }
 }

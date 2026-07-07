@@ -38,6 +38,23 @@ struct ContentView: View {
         )
     }
 
+    /// SwiftUI クローム（AI/エラーパネル）に適用する明暗モード。
+    /// ターミナルテーマの選択に追従させ、パネルの material と文字色をまとめて切り替える。
+    /// これが無いと、システムがライトでテーマだけダークのとき、
+    /// パネルの文字が暗いままダーク背景に埋もれて読めなくなる。
+    private var effectiveColorScheme: ColorScheme {
+        switch themeStore.mode {
+        case .light:  return .light
+        case .dark:   return .dark
+        case .system: return colorScheme
+        case .custom:
+            // 背景の相対輝度で明暗を判定する（ITU-R BT.601 係数）。
+            let bg = themeStore.customTheme.background
+            let luma = 0.299 * Double(bg.r) + 0.587 * Double(bg.g) + 0.114 * Double(bg.b)
+            return luma < 128 ? .dark : .light
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             // ウィンドウ全体をターミナル背景色で埋める（角丸の内側まで回り込ませる）。
@@ -78,6 +95,8 @@ struct ContentView: View {
                     Color.clear.preference(key: PanelHeightKey.self, value: proxy.size.height)
                 }
             )
+            // AI/エラーパネルの明暗を、ターミナルテーマの選択に追従させる。
+            .environment(\.colorScheme, effectiveColorScheme)
         }
         .onPreferenceChange(PanelHeightKey.self) { height in
             panelHeight = height

@@ -21,9 +21,9 @@ struct KastenApp: App {
         }
         .windowResizability(.contentMinSize)
         .commands {
-            // 標準の「Kasten について」を、利用 OSS のライセンス表示付きに差し替える。
+            // 標準の「NagiKasten について」を、利用 OSS のライセンス表示付きに差し替える。
             CommandGroup(replacing: .appInfo) {
-                Button("Kasten について") {
+                Button("NagiKasten について") {
                     KastenApp.showAboutPanel()
                 }
             }
@@ -68,7 +68,7 @@ struct KastenApp: App {
         WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         """
 
-        let header = String(localized: "Kasten は以下のオープンソースソフトウェアを利用しています。\n\n")
+        let header = String(localized: "NagiKasten は以下のオープンソースソフトウェアを利用しています。\n\n")
 
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = 2
