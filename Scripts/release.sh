@@ -14,6 +14,10 @@
 #   7. GitHub Release の作成と DMG の添付
 #   8. ラズパイの公開ページへ DMG を転送する（確認あり）
 #
+# リリースノートは notes/notes-<バージョン>.md（git 管理外）。
+# 無ければ雛形を作って一旦停止する。この判定はビルドの前に置いてある。
+# 5 分待たされた末に「ノートを書け」と言われるのは間抜けだからな。
+#
 # 6 以降は取り返しがつかないので、その手前で一度確認を挟む。
 #
 
@@ -39,6 +43,7 @@ PBXPROJ="$PROJECT/project.pbxproj"
 BUILD_DIR="$REPO_ROOT/build"
 ARCHIVE="$BUILD_DIR/$APP_NAME.xcarchive"
 EXPORT_DIR="$BUILD_DIR/export"
+NOTES_DIR="$REPO_ROOT/notes"          # git 管理外。リリースノートの置き場
 APP_PATH="$EXPORT_DIR/$APP_NAME.app"
 
 step() { printf '\n\033[1;36m==>\033[0m \033[1m%s\033[0m\n' "$*"; }
@@ -48,6 +53,7 @@ die()  { printf '\033[1;31mエラー:\033[0m %s\n' "$*" >&2; exit 1; }
 
 VERSION=""
 NOTES_FILE=""
+AUTO_NOTES=0
 PUBLISH=1
 DRY_RUN=0
 ASSUME_YES=0
@@ -62,7 +68,9 @@ usage() {
   <バージョン>  1.1 のような数値のみの形式。先頭の v は付けない。
 
 オプション:
-  --notes-file <path>  リリースノートのファイル。省略時は git のコミットから自動生成する
+  --notes-file <path>  リリースノートのファイルを明示する
+                       省略時は notes/notes-<バージョン>.md。無ければ雛形を作って停止
+  --auto-notes         ノートを書かず、GitHub のコミットログ自動生成で済ませる
   --no-publish         push と GitHub Release を行わず、DMG を作るところで止める
   --yes                確認プロンプトを飛ばす
   --dry-run            実際には何もせず、行う手順だけを表示する
@@ -87,6 +95,7 @@ while [[ $# -gt 0 ]]; do
 	case "$1" in
 		-h|--help)    usage; exit 0 ;;
 		--notes-file) NOTES_FILE="${2:-}"; shift 2 ;;
+		--auto-notes) AUTO_NOTES=1; shift ;;
 		--no-publish) PUBLISH=0; shift ;;
 		--yes)        ASSUME_YES=1; shift ;;
 		--dry-run)    DRY_RUN=1; shift ;;
@@ -137,6 +146,36 @@ info "新しいバージョン : $VERSION"
 info "ビルド番号       : ${CURRENT_BUILD:-不明}（Xcode で手動管理。スクリプトは変更しない）"
 info "ブランチ         : $BRANCH"
 
+# ---- リリースノート ---------------------------------------------------------
+
+if [[ $PUBLISH -eq 1 && $AUTO_NOTES -eq 0 ]]; then
+	if [[ -n "$NOTES_FILE" ]]; then
+		[[ -f "$NOTES_FILE" ]] || die "リリースノートが見つからない: $NOTES_FILE"
+	else
+		NOTES_FILE="$NOTES_DIR/notes-$VERSION.md"
+	fi
+
+	if [[ ! -f "$NOTES_FILE" ]]; then
+		if [[ $DRY_RUN -eq 1 ]]; then
+			# --dry-run は何も変更しない約束なので、雛形は作らずに告げるだけ。
+			warn "リリースノートがまだ無い: $NOTES_FILE"
+			warn "本番実行時は、雛形を作った上で一旦停止する。"
+		else
+			mkdir -p "$(dirname "$NOTES_FILE")"
+			printf '%s\n' '- ここに変更点を書く' > "$NOTES_FILE"
+			step "リリースノートの雛形を作った"
+			info "$NOTES_FILE"
+			info "アプリの通知シートは Markdown を解釈しない。"
+			info "見出しは使わず「- 」の箇条書きだけで書け。"
+			info "書き終えたら、同じコマンドをもう一度実行しろ。"
+			exit 0
+		fi
+	else
+		step "リリースノート"
+		sed 's/^/    /' "$NOTES_FILE"
+	fi
+fi
+
 # 公証プロファイルの存在確認。ここで弾いておかないと、
 # 5 分かけてビルドした後に「プロファイルが無い」で落ちることになる。
 step "公証プロファイルの確認"
@@ -158,7 +197,11 @@ if [[ $DRY_RUN -eq 1 ]]; then
 	info "  4. notarytool submit --wait → stapler staple → 検証"
 	if [[ $PUBLISH -eq 1 ]]; then
 		info "  5. commit / tag v$VERSION / push"
-		info "  6. gh release create v${VERSION}（DMG を添付）"
+		if [[ $AUTO_NOTES -eq 1 ]]; then
+			info "  6. gh release create v${VERSION}（DMG を添付 / ノートは自動生成）"
+		else
+			info "  6. gh release create v${VERSION}（DMG を添付 / ${NOTES_FILE}）"
+		fi
 		info "  7. ${SERVER} へ scp（確認あり）"
 	else
 		info "  5. --no-publish のため push と Release は行わない"
@@ -321,17 +364,18 @@ git -C "$REPO_ROOT" push origin "v$VERSION"
 step "GitHub Release を作る"
 # ドラフトやプレリリースにはしない。アプリ側が見る /releases/latest は
 # その両方を除外するので、そうすると更新通知が飛ばなくなる。
-if [[ -n "$NOTES_FILE" ]]; then
-	[[ -f "$NOTES_FILE" ]] || die "リリースノートが見つからない: $NOTES_FILE"
-	gh release create "v$VERSION" "$DMG" \
-		--repo "$GITHUB_REPO" \
-		--title "$APP_NAME $VERSION" \
-		--notes-file "$NOTES_FILE"
-else
+if [[ $AUTO_NOTES -eq 1 ]]; then
+	# GitHub にコミットログから生成させる。生の Markdown と長い URL が
+	# そのまま通知シートに流れるので、常用はするな。
 	gh release create "v$VERSION" "$DMG" \
 		--repo "$GITHUB_REPO" \
 		--title "$APP_NAME $VERSION" \
 		--generate-notes
+else
+	gh release create "v$VERSION" "$DMG" \
+		--repo "$GITHUB_REPO" \
+		--title "$APP_NAME $VERSION" \
+		--notes-file "$NOTES_FILE"
 fi
 
 # ---- 8. 自分のサーバーに置く --------------------------------------------

@@ -3,5 +3,6 @@
 *.userdata
 .DS_Store
 build/
+notes/
 DerivedData/
 .build/
