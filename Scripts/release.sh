@@ -24,7 +24,7 @@ PROJECT_NAME="Kasten"                 # .xcodeproj のファイル名
 SCHEME="Kasten"                       # スキーム名。ターゲット名（NagiKasten）とは別物。
 APP_NAME="NagiKasten"                 # 書き出される .app の名前
 GITHUB_REPO="inugamine/NagiKasten"
-NOTARY_PROFILE="NagiKasten"           # notarytool store-credentials で保存した名前
+NOTARY_PROFILE="NagiKasten-notary"    # notarytool store-credentials で保存した名前
 SIGN_IDENTITY="Developer ID Application: Shota Nakamura (3WNHDR762B)"
 
 # ---- 下ごしらえ ------------------------------------------------------------
@@ -183,12 +183,16 @@ info "CURRENT_PROJECT_VERSION = $NEXT_BUILD"
 step "アーカイブを作る（数分かかる）"
 rm -rf "$BUILD_DIR"
 # ログを全部見たければ -quiet を外せ。
+# -allowProvisioningUpdates が無いと、プロファイルの取得・更新が
+# 必要になった瞬間に落ちる。GUI の Xcode は勝手に取りに行くので、
+# 「Xcode では通るのにコマンドラインだと落ちる」の典型的な原因になる。
 xcodebuild archive \
 	-project "$PROJECT" \
 	-scheme "$SCHEME" \
 	-configuration Release \
 	-archivePath "$ARCHIVE" \
 	-destination 'generic/platform=macOS' \
+	-allowProvisioningUpdates \
 	-quiet
 
 step "Developer ID で書き出す"
@@ -196,6 +200,7 @@ xcodebuild -exportArchive \
 	-archivePath "$ARCHIVE" \
 	-exportOptionsPlist "$SCRIPT_DIR/ExportOptions.plist" \
 	-exportPath "$EXPORT_DIR" \
+	-allowProvisioningUpdates \
 	-quiet
 
 [[ -d "$APP_PATH" ]] || die "書き出しに失敗したらしい: $APP_PATH が無い"
