@@ -103,7 +103,7 @@ step "事前チェック"
 # アプリ側の AppVersion が解釈できる形式か。ここを緩めると
 # 「更新があります」が出ない・出っぱなしになる、の両方が起きうる。
 [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || \
-	die "バージョンの形式が不正だ: $VERSION（例: 1.1 / 1.2.3。先頭の v は不要）"
+	die "バージョンの形式が不正だ: ${VERSION}（例: 1.1 / 1.2.3。先頭の v は不要）"
 
 for cmd in xcodebuild create-dmg git; do
 	command -v "$cmd" >/dev/null 2>&1 || die "$cmd が見つからない。"
@@ -153,7 +153,7 @@ if [[ $DRY_RUN -eq 1 ]]; then
 	info "  4. notarytool submit --wait → stapler staple → 検証"
 	if [[ $PUBLISH -eq 1 ]]; then
 		info "  5. commit / tag v$VERSION / push"
-		info "  6. gh release create v$VERSION（DMG を添付）"
+		info "  6. gh release create v${VERSION}（DMG を添付）"
 	else
 		info "  5. --no-publish のため push と Release は行わない"
 	fi
