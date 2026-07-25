@@ -9,8 +9,8 @@ macOS ネイティブのターミナルアプリ。日本語入力（IME）の�
 ## スクリーンショット
 
 <!-- TODO: スクリーンショットを docs/ などに置いて貼る -->
-![Kasten](Docs/Kasten1.png) 
-![Kasten](Docs/Kasten2.png) 
+![Kasten](Docs/NagiKasten1.png) 
+![Kasten](Docs/NagiKasten2.png) 
 
 
 ## 特徴
