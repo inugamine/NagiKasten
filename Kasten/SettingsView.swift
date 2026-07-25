@@ -36,9 +36,9 @@ struct SettingsView: View {
                         Text(mode.label).tag(mode)
                     }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
 
-                Text("「システム」は macOS のライト/ダーク設定に追従します。「カスタム」で各色を自由に設定できます。")
+                Text("「システム」は macOS のライト/ダーク設定に追従します。「アール・デコ」は暗色のみで、プロンプトの装飾も切り替わります。「カスタム」で各色を自由に設定できます（装飾は付きません）。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -58,8 +58,14 @@ struct SettingsView: View {
                 Text("カスタム色")
                     .font(.headline)
                 Spacer()
-                Button("ダークから複製") { themeStore.customTheme = .dark }
-                Button("ライトから複製") { themeStore.customTheme = .light }
+                // プリセットが増えても横幅を食わないよう Menu に畳む。
+                Menu("プリセットから複製") {
+                    Button("ダーク") { themeStore.customTheme = .dark }
+                    Button("ライト") { themeStore.customTheme = .light }
+                    Divider()
+                    Button("アール・デコ") { themeStore.customTheme = .artDeco }
+                }
+                .fixedSize()
             }
 
             sectionBox("基本") {

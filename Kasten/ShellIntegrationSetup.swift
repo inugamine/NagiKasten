@@ -8,10 +8,31 @@
 
 import Foundation
 
+/// プロンプトの装飾様式。テーマに連動して切り替える。
+///
+/// 実際の値は一時ファイルに書き出され、zsh が毎プロンプトで読む。
+/// アプリ側とシェル側は寿命が違う（シェルは起動時に一度だけスクリプトを読む）ため、
+/// このファイル経由の受け渡しが両者を繋ぐ経路になっている。
+/// pty に書き込む方法もあるが、それだとユーザが入力中の行に文字を注入してしまう。
+enum PromptOrnament: String {
+    /// 既定。装飾を持たない配色（凪など）向け。
+    case plain
+    /// アール・デコ。真鍮の階段と菱形で縁取る。
+    case artDeco = "artdeco"
+
+    /// 見た目モードから対応する様式を決める。
+    /// 装飾は「名前の付いたプリセット」に従う。
+    /// カスタムで色だけ真似ても装飾は付かない。
+    init(mode: AppearanceMode) {
+        self = mode.isOrnamented ? .artDeco : .plain
+    }
+}
+
 enum ShellIntegrationSetup {
     
     struct Result {
-        let zdotdir: String   // zsh に渡す ZDOTDIR（Kastenの一時ディレクトリ）
+        let zdotdir: String       // zsh に渡す ZDOTDIR（Kastenの一時ディレクトリ）
+        let ornamentFile: String  // プロンプトの装飾様式を書き込むファイル
     }
     
     /// Kasten の zsh 統合スクリプト本体（OSC 133 フック）。
@@ -82,14 +103,39 @@ enum ShellIntegrationSetup {
             fi
         fi
 
-        # 1行目: 📁 ディレクトリ （ブランチがあれば） 🌿 ブランチ
-        local __kasten_line1="%F{cyan}📁 ${__kasten_dir}%f"
-        if [[ -n "$__kasten_branch" ]]; then
-            __kasten_line1+="  %F{magenta}🌿 ${__kasten_branch}%f"
+        # 装飾様式を毎回ファイルから読む。アプリがテーマ変更時に書き換えるので、
+        # シェルを起動し直さなくても次のプロンプトから新しい様式に切り替わる。
+        # ファイルが無い・読めない場合は既定（plain）に倒す。
+        local __kasten_ornament="plain"
+        if [[ -n "$KASTEN_ORNAMENT_FILE" && -r "$KASTEN_ORNAMENT_FILE" ]]; then
+            __kasten_ornament=$(<"$KASTEN_ORNAMENT_FILE")
+        fi
+
+        local __kasten_line1 __kasten_line2
+
+        if [[ "$__kasten_ornament" == "artdeco" ]]; then
+            # アール・デコ: 真鍮の階段と菱形。
+            # 色は必ず ANSI インデックスで指定する。直接 16 進で書くと、
+            # テーマを戻したときにプロンプトだけが前の色のまま取り残される。
+            # 3 番＝アクセント（アール・デコでは真鍮）、
+            # 4 番＝青系（同じくサファイア）、2 番＝緑系（同じく翡翠）。
+            __kasten_line1="%F{3}◤▰▰%f %F{4}${__kasten_dir}%f"
+            if [[ -n "$__kasten_branch" ]]; then
+                __kasten_line1+="  %F{3}◈%f %F{2}${__kasten_branch}%f"
+            fi
+            # 尾を真鍮にして、金の細罫から入力位置へ導く形にする。
+            __kasten_line2="%F{3}╰──%f%F{2}❯%f "
+        else
+            # 既定（凪）: 絵文字で現在地とブランチを示す。
+            __kasten_line1="%F{cyan}📁 ${__kasten_dir}%f"
+            if [[ -n "$__kasten_branch" ]]; then
+                __kasten_line1+="  %F{magenta}🌿 ${__kasten_branch}%f"
+            fi
+            __kasten_line2="%F{green}❯%f "
         fi
 
         # 1行目（情報）＋改行＋2行目（入力記号）
-        PROMPT="${__kasten_line1}"$'\n'"%F{green}❯%f "
+        PROMPT="${__kasten_line1}"$'\n'"${__kasten_line2}"
     }
 
     add-zsh-hook precmd __kasten_precmd
@@ -111,10 +157,14 @@ enum ShellIntegrationSetup {
         
         let scriptURL = kastenDir.appendingPathComponent("kasten-integration.zsh")
         let zshrcURL = kastenDir.appendingPathComponent(".zshrc")
+        let ornamentURL = kastenDir.appendingPathComponent("ornament")
         
         let zshrcContents = """
         # Kasten が自動生成した一時 .zshrc
         export ZDOTDIR="\(userZdotdir)"
+        
+        # プロンプトの装飾様式を書いたファイル。統合スクリプトが毎プロンプトで読む。
+        export KASTEN_ORNAMENT_FILE="\(ornamentURL.path)"
         
         if [[ -f "\(userZdotdir)/.zprofile" ]]; then
             source "\(userZdotdir)/.zprofile"
@@ -138,6 +188,14 @@ enum ShellIntegrationSetup {
             try zshrcContents.write(to: zshrcURL, atomically: true, encoding: .utf8)
         } catch { return nil }
         
-        return Result(zdotdir: kastenDir.path)
+        return Result(zdotdir: kastenDir.path, ornamentFile: ornamentURL.path)
+    }
+
+    /// 装飾様式を一時ファイルへ書き出す。zsh は毎プロンプトでこれを読む。
+    /// atomically 指定によりリネーム置換になるため、シェルが読んでいる最中でも
+    /// 中途半端な内容を読むことはない。
+    /// 書き込みに失敗しても致命的ではない（zsh 側は読めなければ既定に倒れる）。
+    static func writeOrnament(_ ornament: PromptOrnament, to path: String) {
+        try? ornament.rawValue.write(toFile: path, atomically: true, encoding: .utf8)
     }
 }

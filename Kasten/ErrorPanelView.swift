@@ -8,17 +8,38 @@
 import SwiftUI
 
 /// エラー解析結果を表示するスライドアップパネル
+///
+/// 装飾は AI パネルと同じ様式（階段角＋二重ヘアライン）を使うが、
+/// 色は意図的に分けている。理由は accent の説明を参照。
 struct ErrorPanelView: View {
     @ObservedObject var viewModel: KastenViewModel
+    /// 現在の配色。装飾時の色をここから引く。
+    var theme: KastenTheme
+    /// 装飾を纏うか。AppearanceMode.isOrnamented をそのまま受け取る。
+    var isOrnamented: Bool
     /// ターミナルにコマンド文字列を挿入する（改行は付けない＝実行はユーザーに委ねる）
     var onInsertCommand: (String) -> Void
+
+    /// このパネルの性格を示す色。装飾時はオックスブラッド（ANSI 1 番）。
+    /// AI パネルの真鍮とは意図的に分けている。
+    /// 額縁まで同じ金にすると、パネルがせり上がってきた瞬間に
+    /// 「提案」なのか「エラー」なのかが一目で判別できなくなる。
+    private var accent: Color {
+        isOrnamented ? Color(nsColor: theme.ansi[1].nsColor) : .red
+    }
+
+    /// 操作できる場所を示す色。装飾時は真鍮（ANSI 3 番）。
+    /// 「押せば何かが起きる」印は、どちらのパネルでも共通にする。
+    private var actionColor: Color {
+        isOrnamented ? Color(nsColor: theme.ansi[3].nsColor) : .orange
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // ヘッダー
             HStack {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(accent)
 
                 Text("エラー解析")
                     .font(.system(size: 14, weight: .semibold))
@@ -59,12 +80,13 @@ struct ErrorPanelView: View {
             } else if let message = viewModel.errorMessage {
                 Text(message)
                     .font(.system(size: 12))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(accent)
             }
         }
         .padding(16)
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        // AI パネルと同じ外装を使う。形は揃え、色だけ分ける。
+        .panelChrome(isOrnamented: isOrnamented, accent: accent)
         .shadow(color: .black.opacity(0.2), radius: 8, y: -2)
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
@@ -96,9 +118,10 @@ struct ErrorPanelView: View {
             // 修正コマンド（あれば）
             if !analysis.fixCommand.isEmpty {
                 HStack {
-                    Text("$")
+                    // 装飾時はシェルの $ を菱形に差し替える。
+                    Text(verbatim: isOrnamented ? "◈" : "$")
                         .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(isOrnamented ? actionColor : Color.secondary)
                     Text(analysis.fixCommand)
                         .font(.system(size: 12, design: .monospaced))
                         .textSelection(.enabled)
@@ -111,11 +134,11 @@ struct ErrorPanelView: View {
                         viewModel.dismissErrorPanel()
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.orange)
+                    .tint(actionColor)
                     .controlSize(.small)
                 }
                 .padding(8)
-                .background(Color.orange.opacity(0.1))
+                .background(actionColor.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
