@@ -9,11 +9,16 @@ import SwiftUI
 import SwiftTerm
 import Combine
 
-/// 配色の見た目モード。システム追従／手動ライト・ダーク／カスタム。
+/// 配色の見た目モード。システム追従／手動ライト・ダーク／アール・デコ／カスタム。
+///
+/// この enum は「今どの配色が有効か」の唯一の根拠でもある。
+/// プロンプトの装飾はこの値を見て切り替えるため、
+/// 新しいプリセットを「名前付き」で扱いたければここにケースを追加する。
 enum AppearanceMode: String, CaseIterable, Identifiable {
     case system
     case light
     case dark
+    case artDeco
     case custom
     
     var id: String { rawValue }
@@ -21,12 +26,20 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     /// セグメント表示用の短いラベル。
     var label: String {
         switch self {
-        case .system: return String(localized: "システム")
-        case .light:  return String(localized: "ライト")
-        case .dark:   return String(localized: "ダーク")
-        case .custom: return String(localized: "カスタム")
+        case .system:  return String(localized: "システム")
+        case .light:   return String(localized: "ライト")
+        case .dark:    return String(localized: "ダーク")
+        case .artDeco: return String(localized: "アール・デコ")
+        case .custom:  return String(localized: "カスタム")
         }
     }
+
+    /// このプリセットが装飾（真鍮の枠や階段状の記号）を纏うか。
+    ///
+    /// プロンプトと SwiftUI クロームの両方がこれを見る。
+    /// 判定をここに一本化しておくことで、装飾付きのプリセットを増やしたときに
+    /// 片方だけ直し忘れることを防ぐ。
+    var isOrnamented: Bool { self == .artDeco }
 }
 
 /// ターミナルの配色テーマ。前景・背景・カーソル・選択色と ANSI 16 色を持つ。
@@ -131,6 +144,32 @@ extension KastenTheme {
             RGB("#3A78B0"), RGB("#B5567E"), RGB("#2F8A86"), RGB("#6E5C48"),
             RGB("#7A6650"), RGB("#E26A45"), RGB("#6FA04A"), RGB("#DDA02E"),
             RGB("#4E8DC4"), RGB("#C76B91"), RGB("#3DA39E"), RGB("#4A3B2E"),
+        ]
+    )
+
+    // MARK: - アール・デコ
+    //
+    // 1920〜30年代の様式を配色だけで表現する。原則は 3 つ。
+    //  1. 前景を純白にしない。象牙で少し温度を持たせる。
+    //  2. 真鍮（ゴールド）を唯一の主アクセントとして、黄色の枠に据える。
+    //  3. ANSI の彩度を全体的に落とし、宝石を思わせる沈んだ色に寄せる。
+    // 装飾そのものは枠やカードで表現し、ここでは色だけを担当する。
+
+    /// アール・デコ。漆黒の下地に真鍮のアクセント。
+    /// 暗色専用で、対になる明色版は持たない。
+    static let artDeco = KastenTheme(
+        foreground: RGB("#EDE3CC"),          // 象牙。純白より柔らかく目に優しい
+        background: RGB("#1A1A24"),          // 漆黒にわずかな紫紺
+        backgroundGradientBottom: RGB("#0B0B10"),
+        cursor: RGB("#C9A34A"),              // 真鍮
+        selection: RGB("#756032"),           // 沈んだ金。象牙の前景が AA を保てる上限付近
+        ansi: [
+            // 0 は本来背景用の「黒」だが、前景に出しても読める位置まで持ち上げている。
+            // その分 8（明るい黒）も追従させ、両者の段差を残している。
+            RGB("#42424F"), RGB("#9E4A3C"), RGB("#66927A"), RGB("#C9A34A"),
+            RGB("#6288B0"), RGB("#96729E"), RGB("#669EA4"), RGB("#D8CDB4"),
+            RGB("#5E5E74"), RGB("#C06450"), RGB("#82B294"), RGB("#E0BE70"),
+            RGB("#82A6CC"), RGB("#B492BC"), RGB("#86BCC2"), RGB("#EDE3CC"),
         ]
     )
 }

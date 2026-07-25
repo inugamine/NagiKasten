@@ -544,6 +544,10 @@ final class KastenTerminalView: LocalProcessTerminalView {
     /// カスタムモードで使う配色。
     var customTheme: KastenTheme = .dark
 
+    /// プロンプトの装飾様式を書き込む一時ファイルのパス。
+    /// zsh 統合を仕込んだ場合のみ設定される（zsh 以外のシェルでは nil）。
+    var ornamentFilePath: String?
+
     /// モードと（システム追従時の）実効アピアランスから、当てるテーマを決めて適用する。
     func applyCurrentTheme() {
         let theme: KastenTheme
@@ -552,6 +556,8 @@ final class KastenTerminalView: LocalProcessTerminalView {
             theme = .light
         case .dark:
             theme = .dark
+        case .artDeco:
+            theme = .artDeco
         case .custom:
             theme = customTheme
         case .system:
@@ -614,6 +620,10 @@ struct TerminalContainer: NSViewRepresentable {
         var environment = makeBaseEnvironment()
         if shellName == "zsh", let setup = ShellIntegrationSetup.prepare() {
             environment["ZDOTDIR"] = setup.zdotdir
+            terminal.ornamentFilePath = setup.ornamentFile
+            // 最初のプロンプトから正しい様式で出るよう、シェルを起こす前に書いておく。
+            ShellIntegrationSetup.writeOrnament(PromptOrnament(mode: themeStore.mode),
+                                                to: setup.ornamentFile)
         }
         let envArray = environment.map { "\($0.key)=\($0.value)" }
         
@@ -646,6 +656,10 @@ struct TerminalContainer: NSViewRepresentable {
             nsView.appearanceMode = mode
             nsView.customTheme = custom
             nsView.applyCurrentTheme()
+            // 装飾様式もテーマに追従させる。zsh は次のプロンプトでこれを読む。
+            if let path = nsView.ornamentFilePath {
+                ShellIntegrationSetup.writeOrnament(PromptOrnament(mode: mode), to: path)
+            }
         }
     }
     

@@ -19,10 +19,11 @@ struct ContentView: View {
     /// 現在のテーマ。system はシステムの明暗に合わせる。
     private var effectiveTheme: KastenTheme {
         switch themeStore.mode {
-        case .light:  return .light
-        case .dark:   return .dark
-        case .custom: return themeStore.customTheme
-        case .system: return (colorScheme == .dark) ? .dark : .light
+        case .light:   return .light
+        case .dark:    return .dark
+        case .artDeco: return .artDeco
+        case .custom:  return themeStore.customTheme
+        case .system:  return (colorScheme == .dark) ? .dark : .light
         }
     }
 
@@ -46,6 +47,8 @@ struct ContentView: View {
         switch themeStore.mode {
         case .light:  return .light
         case .dark:   return .dark
+        // アール・デコは暗色専用なので、クロームも常にダークに揃える。
+        case .artDeco: return .dark
         case .system: return colorScheme
         case .custom:
             // 背景の相対輝度で明暗を判定する（ITU-R BT.601 係数）。
@@ -76,7 +79,9 @@ struct ContentView: View {
             // オーバーレイ群（下からせり上がる）
             VStack(spacing: 0) {
                 if viewModel.isAnswerPanelVisible {
-                    AIAnswerView(viewModel: viewModel) { command in
+                    AIAnswerView(viewModel: viewModel,
+                                 theme: effectiveTheme,
+                                 isOrnamented: themeStore.mode.isOrnamented) { command in
                         // 抽出されたコマンドをターミナルに挿入（実行はユーザーに委ねる）
                         bridge.sendToTerminal(command)
                     }
@@ -84,7 +89,9 @@ struct ContentView: View {
                 }
 
                 if viewModel.isErrorPanelVisible {
-                    ErrorPanelView(viewModel: viewModel) { command in
+                    ErrorPanelView(viewModel: viewModel,
+                                   theme: effectiveTheme,
+                                   isOrnamented: themeStore.mode.isOrnamented) { command in
                         bridge.sendToTerminal(command)
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
