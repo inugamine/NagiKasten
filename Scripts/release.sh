@@ -12,6 +12,7 @@
 #   5. 公証 → ステープル → 検証
 #   6. コミット / タグ / push
 #   7. GitHub Release の作成と DMG の添付
+#   8. ラズパイの公開ページへ DMG を転送する（確認あり）
 #
 # 6 以降は取り返しがつかないので、その手前で一度確認を挟む。
 #
@@ -26,6 +27,8 @@ APP_NAME="NagiKasten"                 # 書き出される .app の名前
 GITHUB_REPO="inugamine/NagiKasten"
 NOTARY_PROFILE="NagiKasten-notary"    # notarytool store-credentials で保存した名前
 SIGN_IDENTITY="Developer ID Application: Shota Nakamura (3WNHDR762B)"
+SERVER="pi5@raspi5"                   # 公開ページのあるラズパイ
+SERVER_DIR="/var/www/flask_static/nagikasten"
 
 # ---- 下ごしらえ ------------------------------------------------------------
 
@@ -128,8 +131,10 @@ if git -C "$REPO_ROOT" rev-parse "v$VERSION" >/dev/null 2>&1; then
 fi
 
 CURRENT_VERSION="$(sed -n -E 's/.*MARKETING_VERSION = ([^;]+);.*/\1/p' "$PBXPROJ" | head -1)"
+CURRENT_BUILD="$(sed -n -E 's/.*CURRENT_PROJECT_VERSION = ([0-9]+);.*/\1/p' "$PBXPROJ" | head -1)"
 info "現在のバージョン : ${CURRENT_VERSION:-不明}"
 info "新しいバージョン : $VERSION"
+info "ビルド番号       : ${CURRENT_BUILD:-不明}（Xcode で手動管理。スクリプトは変更しない）"
 info "ブランチ         : $BRANCH"
 
 # 公証プロファイルの存在確認。ここで弾いておかないと、
@@ -147,13 +152,14 @@ info "OK"
 if [[ $DRY_RUN -eq 1 ]]; then
 	step "--dry-run のためここで終了する"
 	info "この後の手順:"
-	info "  1. $PBXPROJ の MARKETING_VERSION を $VERSION に、CURRENT_PROJECT_VERSION を +1"
+	info "  1. $PBXPROJ の MARKETING_VERSION を $VERSION に書き換える（ビルド番号には触らない）"
 	info "  2. xcodebuild archive → exportArchive（Developer ID）"
 	info "  3. create-dmg で $APP_NAME-$VERSION.dmg を作成し codesign"
 	info "  4. notarytool submit --wait → stapler staple → 検証"
 	if [[ $PUBLISH -eq 1 ]]; then
 		info "  5. commit / tag v$VERSION / push"
 		info "  6. gh release create v${VERSION}（DMG を添付）"
+		info "  7. ${SERVER} へ scp（確認あり）"
 	else
 		info "  5. --no-publish のため push と Release は行わない"
 	fi
@@ -169,14 +175,12 @@ step "バージョンを更新する"
 # Info.plist を前提にする agvtool は素直に動かないことがある。
 # バージョンの真の置き場所は pbxproj なので、そこを直接触るのが確実。
 sed -i '' -E "s/(MARKETING_VERSION = )[^;]*;/\1$VERSION;/g" "$PBXPROJ"
-
-CURRENT_BUILD="$(sed -n -E 's/.*CURRENT_PROJECT_VERSION = ([0-9]+);.*/\1/p' "$PBXPROJ" | head -1)"
-NEXT_BUILD=$(( ${CURRENT_BUILD:-0} + 1 ))
-sed -i '' -E "s/(CURRENT_PROJECT_VERSION = )[0-9]+;/\1$NEXT_BUILD;/g" "$PBXPROJ"
 VERSION_BUMPED=1
 
+# CURRENT_PROJECT_VERSION（ビルド番号）には触らない。Xcode 側で手動管理する方針。
+# 増やす主体を一つに絞っておかないと、どちらが書いた値か分からなくなる。
 info "MARKETING_VERSION       = $VERSION"
-info "CURRENT_PROJECT_VERSION = $NEXT_BUILD"
+info "CURRENT_PROJECT_VERSION = ${CURRENT_BUILD:-不明}（変更なし）"
 
 # ---- 3. ビルドと書き出し ---------------------------------------------------
 
@@ -283,7 +287,14 @@ fi
 
 step "コミットしてタグを打つ"
 git -C "$REPO_ROOT" add "$PBXPROJ"
-git -C "$REPO_ROOT" commit -m "Release $VERSION"
+# 既に目的のバージョンが入っていた場合、pbxproj に差分が出ない。
+# そのまま commit すると「変更なし」で失敗して、公証まで終わった後に
+# スクリプトが死ぬことになるので、その場合は HEAD にタグだけ打つ。
+if git -C "$REPO_ROOT" diff --cached --quiet; then
+	info "pbxproj に変更なし。コミットは省略して HEAD にタグを打つ。"
+else
+	git -C "$REPO_ROOT" commit -m "Release $VERSION"
+fi
 git -C "$REPO_ROOT" tag -a "v$VERSION" -m "$APP_NAME $VERSION"
 COMMITTED=1
 
@@ -307,6 +318,28 @@ else
 		--repo "$GITHUB_REPO" \
 		--title "$APP_NAME $VERSION" \
 		--generate-notes
+fi
+
+# ---- 8. 自分のサーバーに置く --------------------------------------------
+
+if [[ $ASSUME_YES -eq 1 ]]; then
+	reply="y"
+else
+	printf '\n'
+	read -r -p "${SERVER} にも DMG を置くか？ [y/N] " reply
+fi
+
+if [[ "$reply" == "y" || "$reply" == "Y" ]]; then
+	step "ラズパイに転送する"
+	REMOTE_DMG="$SERVER_DIR/$APP_NAME-$VERSION.dmg"
+	# ここで失敗しても GitHub Release は既に出ている。作り直す必要は
+	# 無いので、スクリプトを殺さずに手で叩き直せるコマンドを出す。
+	if scp "$DMG" "$SERVER:$REMOTE_DMG"; then
+		info "OK: $SERVER:$REMOTE_DMG"
+	else
+		warn "転送に失敗した。GitHub Release は公開済みなので、これだけ手で叩けばいい:"
+		warn "  scp \"$DMG\" \"$SERVER:$REMOTE_DMG\""
+	fi
 fi
 
 step "完了"
