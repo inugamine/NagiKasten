@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Developer ID 配布（Mac App Store 外）。 -->
+	<key>method</key>
+	<string>developer-id</string>
+
+	<key>teamID</key>
+	<string>3WNHDR762B</string>
+
+	<key>signingStyle</key>
+	<string>automatic</string>
+
+	<!-- export にしておかないと、xcodebuild が書き出しのついでに勝手に
+	     公証へアップロードしに行く。公証はスクリプト側で DMG に対して
+	     行うので、ここでは書き出すだけに留める。 -->
+	<key>destination</key>
+	<string>export</string>
+</dict>
+</plist>

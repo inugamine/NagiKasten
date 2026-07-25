@@ -12,12 +12,18 @@ import AppKit
 @main
 struct KastenApp: App {
     @StateObject private var themeStore = ThemeStore()
+    @StateObject private var updater = UpdateChecker()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(themeStore)
                 .frame(minWidth: 700, minHeight: 450)
+                // 起動時の更新確認。実際に GitHub を叩くのは前回から 24 時間経っている場合だけ。
+                .task { updater.checkOnLaunchIfNeeded() }
+                .sheet(isPresented: $updater.isPresentingResult) {
+                    UpdateResultSheet(updater: updater)
+                }
         }
         .windowResizability(.contentMinSize)
         .commands {
@@ -25,6 +31,9 @@ struct KastenApp: App {
             CommandGroup(replacing: .appInfo) {
                 Button("NagiKasten について") {
                     KastenApp.showAboutPanel()
+                }
+                Button("アップデートを確認…") {
+                    updater.checkManually()
                 }
             }
         }
