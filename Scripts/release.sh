@@ -209,13 +209,27 @@ xcodebuild -exportArchive \
 
 [[ -d "$APP_PATH" ]] || die "書き出しに失敗したらしい: $APP_PATH が無い"
 
-step "署名を検証する"
-codesign --verify --deep --strict --verbose=2 "$APP_PATH"
-info "OK"
-
 # ---- 4. DMG ----------------------------------------------------------------
 
 DMG="$BUILD_DIR/$APP_NAME-$VERSION.dmg"
+DMG_STAGE="$BUILD_DIR/dmg"
+
+step "DMG に入れるものだけを集める"
+# xcodebuild は書き出し先に .app だけでなく DistributionSummary.plist /
+# ExportOptions.plist / Packaging.log も置く。書き出しディレクトリを
+# そのまま create-dmg に渡すと、それらまで DMG に同梱されてしまう。
+# 「余計なものを消す」ではなく「必要なものだけを移す」方式にしておけば、
+# Xcode が将来別のファイルを吐くようになっても巻き込まれない。
+rm -rf "$DMG_STAGE"
+mkdir -p "$DMG_STAGE"
+# cp ではなく ditto。拡張属性やシンボリックリンクを落とさずに複製できる。
+# 署名済みバンドルを cp -R で扱うと、メタデータが欠けて署名が壊れることがある。
+ditto "$APP_PATH" "$DMG_STAGE/$APP_NAME.app"
+
+step "署名を検証する"
+# DMG に入る実物そのものを検証する。複製で壊れていないことの確認を兼ねる。
+codesign --verify --deep --strict --verbose=2 "$DMG_STAGE/$APP_NAME.app"
+info "OK"
 
 step "DMG を作る"
 rm -f "$DMG"
@@ -227,7 +241,7 @@ create-dmg \
 	--icon "$APP_NAME.app" 140 160 \
 	--app-drop-link 380 160 \
 	"$DMG" \
-	"$EXPORT_DIR"
+	"$DMG_STAGE"
 
 step "DMG に署名する"
 codesign --sign "$SIGN_IDENTITY" --timestamp "$DMG"
