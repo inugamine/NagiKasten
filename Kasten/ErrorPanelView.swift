@@ -9,7 +9,7 @@ import SwiftUI
 
 /// エラー解析結果を表示するスライドアップパネル
 ///
-/// 装飾は AI パネルと同じ様式（階段角＋二重ヘアライン）を使うが、
+/// 装飾は AI パネルと同じ様式（階段角＋二重ヘアライン＋四隅の補強線）を使うが、
 /// 色は意図的に分けている。理由は accent の説明を参照。
 struct ErrorPanelView: View {
     @ObservedObject var viewModel: KastenViewModel
@@ -46,12 +46,14 @@ struct ErrorPanelView: View {
 
                 Spacer()
 
-                Button(action: { viewModel.dismissErrorPanel() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(.secondary)
+                // 閉じるボタンは accent ではなく actionColor を使う。
+                // ここを額縁と同じオックスブラッドにすると、
+                // 警告の三角と赤い丸が並んで、どちらが操作対象か読めなくなる。
+                PanelCloseButton(isOrnamented: isOrnamented,
+                                 accent: actionColor,
+                                 knockout: Color(nsColor: theme.background.nsColor)) {
+                    viewModel.dismissErrorPanel()
                 }
-                .buttonStyle(.plain)
             }
 
             // 検出されたエラー（折りたたみ）
