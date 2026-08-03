@@ -151,6 +151,49 @@ fileprivate extension Color {
     }
 }
 
+/// パネルを閉じるボタン。
+///
+/// 装飾時も「塗り潰された円」の形は崩さない。
+/// ここを階段状の枠にすると周りの装飾と同化してしまい、
+/// 「押せるもの」として読めなくなる。形は機能の合図、色だけをテーマに揃える。
+struct PanelCloseButton: View {
+    var isOrnamented: Bool
+    /// 装飾時の円の色。パネル側のアクセントをそのまま受け取る。
+    var accent: Color
+    /// 円から ✕ を抜く色。テーマの地色を渡す。
+    var knockout: Color
+    var action: () -> Void
+
+    @State private var isHovering = false
+
+    /// 円の直径。従来の xmark.circle.fill と同じ見かけの大きさに揃える。
+    private let diameter: CGFloat = 16
+
+    var body: some View {
+        Button(action: action) {
+            if isOrnamented {
+                ZStack {
+                    // 常時しっかり塗る。この面が無いとボタンに見えない。
+                    Circle()
+                        .fill(accent.opacity(isHovering ? 1 : 0.8))
+                    Text(verbatim: "✕")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(knockout)
+                }
+                .frame(width: diameter, height: diameter)
+                .contentShape(Circle())
+            } else {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+    }
+}
+
 /// パネルの外装（切り抜き＋縁取り）をまとめて当てるモディファイア。
 ///
 /// 装飾時は階段角＋真鍮の二重ヘアライン＋四隅の補強線、それ以外は従来の角丸のまま。

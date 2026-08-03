@@ -75,12 +75,11 @@ struct AIAnswerView: View {
                     .font(.system(size: 14, weight: .semibold))
             }
             Spacer()
-            Button(action: { viewModel.dismissAnswerPanel() }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(.secondary)
+            PanelCloseButton(isOrnamented: isOrnamented,
+                             accent: accent,
+                             knockout: Color(nsColor: theme.background.nsColor)) {
+                viewModel.dismissAnswerPanel()
             }
-            .buttonStyle(.plain)
         }
     }
 
