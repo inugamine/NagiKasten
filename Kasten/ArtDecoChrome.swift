@@ -67,9 +67,93 @@ struct SteppedRectangle: Shape, InsettableShape {
     }
 }
 
+/// 四隅にだけ現れる「三本目の線」。
+///
+/// アール・デコは角に向かって装飾が積み上がる様式なので、
+/// 縁取りを全周で厚くするのではなく、角だけを厚くする。
+/// `SteppedRectangle` と同じ幾何を使うため、内側へ寄せても形が破綻しない。
+struct SteppedCornerMarks: Shape, InsettableShape {
+    /// 段ひとつ分の大きさ。`SteppedRectangle` と揃えること。
+    var step: CGFloat = 5
+    /// 角から各辺へ伸ばす腕の長さ。ここが長いと四隅が繋がって普通の枠になる。
+    var arm: CGFloat = 10
+    var insetAmount: CGFloat = 0
+
+    func inset(by amount: CGFloat) -> SteppedCornerMarks {
+        var copy = self
+        copy.insetAmount += amount
+        return copy
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let r = rect.insetBy(dx: insetAmount, dy: insetAmount)
+        guard r.width > 0, r.height > 0 else { return Path() }
+
+        let s = min(step, min(r.width, r.height) / 4)
+        // 腕が伸びすぎて隣の角と繋がらないよう、辺の残り半分を上限にする。
+        let a = max(0, min(arm, (min(r.width, r.height) - 4 * s) / 2 - 2))
+
+        var p = Path()
+
+        // 左上
+        p.move(to: CGPoint(x: r.minX, y: r.minY + 2 * s + a))
+        p.addLine(to: CGPoint(x: r.minX, y: r.minY + 2 * s))
+        p.addLine(to: CGPoint(x: r.minX + s, y: r.minY + 2 * s))
+        p.addLine(to: CGPoint(x: r.minX + s, y: r.minY + s))
+        p.addLine(to: CGPoint(x: r.minX + 2 * s, y: r.minY + s))
+        p.addLine(to: CGPoint(x: r.minX + 2 * s, y: r.minY))
+        p.addLine(to: CGPoint(x: r.minX + 2 * s + a, y: r.minY))
+
+        // 右上
+        p.move(to: CGPoint(x: r.maxX - 2 * s - a, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX - 2 * s, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX - 2 * s, y: r.minY + s))
+        p.addLine(to: CGPoint(x: r.maxX - s, y: r.minY + s))
+        p.addLine(to: CGPoint(x: r.maxX - s, y: r.minY + 2 * s))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.minY + 2 * s))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.minY + 2 * s + a))
+
+        // 右下
+        p.move(to: CGPoint(x: r.maxX, y: r.maxY - 2 * s - a))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.maxY - 2 * s))
+        p.addLine(to: CGPoint(x: r.maxX - s, y: r.maxY - 2 * s))
+        p.addLine(to: CGPoint(x: r.maxX - s, y: r.maxY - s))
+        p.addLine(to: CGPoint(x: r.maxX - 2 * s, y: r.maxY - s))
+        p.addLine(to: CGPoint(x: r.maxX - 2 * s, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.maxX - 2 * s - a, y: r.maxY))
+
+        // 左下
+        p.move(to: CGPoint(x: r.minX + 2 * s + a, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.minX + 2 * s, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.minX + 2 * s, y: r.maxY - s))
+        p.addLine(to: CGPoint(x: r.minX + s, y: r.maxY - s))
+        p.addLine(to: CGPoint(x: r.minX + s, y: r.maxY - 2 * s))
+        p.addLine(to: CGPoint(x: r.minX, y: r.maxY - 2 * s))
+        p.addLine(to: CGPoint(x: r.minX, y: r.maxY - 2 * s - a))
+
+        return p
+    }
+}
+
+fileprivate extension Color {
+    /// 色を白（正）または黒（負）へ寄せる。真鍮の照り返しを作るために使う。
+    ///
+    /// 不透明度をいじる方法だと下地の材質が透けて色味が濁るので、
+    /// AppKit の混色で「明るい真鍮／沈んだ真鍮」そのものを作る。
+    func shifted(by fraction: CGFloat) -> Color {
+        guard fraction != 0,
+              let base = NSColor(self).usingColorSpace(.sRGB) else { return self }
+        let target: NSColor = fraction > 0 ? .white : .black
+        guard let blended = base.blended(withFraction: min(abs(fraction), 1), of: target) else {
+            return self
+        }
+        return Color(nsColor: blended)
+    }
+}
+
 /// パネルの外装（切り抜き＋縁取り）をまとめて当てるモディファイア。
 ///
-/// 装飾時は階段角＋真鍮の二重ヘアライン、それ以外は従来の角丸のまま。
+/// 装飾時は階段角＋真鍮の二重ヘアライン＋四隅の補強線、それ以外は従来の角丸のまま。
 /// 切り抜きと縁取りで同じ形を使う必要があるため、両者をここで一体にしている。
 struct PanelChrome: ViewModifier {
     var isOrnamented: Bool
@@ -87,6 +171,31 @@ struct PanelChrome: ViewModifier {
     private let innerLineWidth: CGFloat = 0.75
     /// 内周の濃さ。
     private let innerOpacity: CGFloat = 0.5
+    /// 四隅の補強線の太さ。内周より僅かに太くして、角に重心を置く。
+    private let cornerLineWidth: CGFloat = 1.0
+    /// 四隅の補強線の濃さ。
+    private let cornerOpacity: CGFloat = 0.75
+
+    /// 外周の照り返し。左上を明るく、右下を沈ませて板金の厚みを出す。
+    private var outerSheen: LinearGradient {
+        LinearGradient(colors: [accent.shifted(by: 0.4),
+                                accent,
+                                accent.shifted(by: -0.3)],
+                       startPoint: .topLeading,
+                       endPoint: .bottomTrailing)
+    }
+
+    /// 内周の照り返し。外周とは逆向きに光らせるのが肝。
+    ///
+    /// 同じ向きに揃えると単に線が二本並んでいるようにしか見えないが、
+    /// 逆向きにすると二本の間が彫り込まれた溝のように読める。
+    private var innerSheen: LinearGradient {
+        LinearGradient(colors: [accent.shifted(by: -0.3).opacity(innerOpacity),
+                                accent.opacity(innerOpacity),
+                                accent.shifted(by: 0.4).opacity(innerOpacity)],
+                       startPoint: .topLeading,
+                       endPoint: .bottomTrailing)
+    }
 
     func body(content: Content) -> some View {
         if isOrnamented {
@@ -96,10 +205,14 @@ struct PanelChrome: ViewModifier {
                 .overlay {
                     ZStack {
                         // 外周: はっきりした真鍮の線
-                        shape.strokeBorder(accent, lineWidth: outerLineWidth)
+                        shape.strokeBorder(outerSheen, lineWidth: outerLineWidth)
                         // 内周: 一段落とした細線。二本一組で「額縁」に見せる
                         shape.inset(by: hairlineGap)
-                            .strokeBorder(accent.opacity(innerOpacity), lineWidth: innerLineWidth)
+                            .strokeBorder(innerSheen, lineWidth: innerLineWidth)
+                        // 四隅: 三本目の線。角だけに現れ、辺の途中で消える
+                        SteppedCornerMarks()
+                            .inset(by: hairlineGap * 2)
+                            .stroke(accent.opacity(cornerOpacity), lineWidth: cornerLineWidth)
                     }
                 }
         } else {

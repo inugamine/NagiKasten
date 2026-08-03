@@ -97,13 +97,29 @@ struct AIAnswerView: View {
         }
     }
 
-    /// 区切り線。装飾時は真鍮の細罫にする。
+    /// 区切り線。装飾時は両端が消える真鍮の罫と、中央の菱形にする。
+    ///
+    /// 一本線をそのまま引くと単なる仕切りだが、中央に焦点を置いて
+    /// 両端を消すと、線自体が意匠になる。菱形はプロンプトと同じ ◈ を使い、
+    /// ターミナル本体と語彙を揃える。
     @ViewBuilder
     private var dividerRow: some View {
         if isOrnamented {
-            Rectangle()
-                .fill(accent.opacity(0.35))
-                .frame(height: 1)
+            HStack(spacing: 8) {
+                Rectangle()
+                    .fill(LinearGradient(colors: [accent.opacity(0), accent.opacity(0.45)],
+                                         startPoint: .leading,
+                                         endPoint: .trailing))
+                    .frame(height: 1)
+                Text(verbatim: "◈")
+                    .font(.system(size: 9))
+                    .foregroundStyle(accent.opacity(0.9))
+                Rectangle()
+                    .fill(LinearGradient(colors: [accent.opacity(0.45), accent.opacity(0)],
+                                         startPoint: .leading,
+                                         endPoint: .trailing))
+                    .frame(height: 1)
+            }
         } else {
             Divider()
         }
