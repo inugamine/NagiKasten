@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/inugamine/SwiftTerm-fork.git",
       "state" : {
-        "revision" : "09b827c3ee68ef0958ef7e43baaf899432cde70e",
-        "version" : "0.1.0"
+        "revision" : "3baba9285af61ec0f1014efb3f14c89eaf5cc23f",
+        "version" : "0.1.1"
       }
     }
   ],
