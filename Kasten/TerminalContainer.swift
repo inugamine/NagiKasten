@@ -547,7 +547,14 @@ final class KastenTerminalView: LocalProcessTerminalView {
         //
         // 先頭の改行で一行空ける。zsh は exit 時に logout を名乗って改行するので、
         // これで Terminal.app と同じ見た目になる。
-        feed(text: "\r\n[\(String(localized: "プロセスが完了しました"))]\r\n")
+        // カーソルも消す。プロセスが死んだ後も点滅していると、
+        // まだ入力を受け付けているように見えて紛らわしいからだ。
+        //
+        // caretView は SwiftTerm の internal なので直接は触れない。代わりに
+        // DECTCEM（ESC [ ? 25 l）を流す。vim や less が使うのと同じ標準の
+        // カーソル非表示シーケンスで、SwiftTerm 側は hideCursor() で
+        // caretView を superview から外す実装になっている。
+        feed(text: "\r\n[\(String(localized: "プロセスが完了しました"))]\r\n\u{1b}[?25l")
     }
 
     // MARK: - テーマ（配色）
