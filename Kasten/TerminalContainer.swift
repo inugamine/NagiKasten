@@ -535,6 +535,21 @@ final class KastenTerminalView: LocalProcessTerminalView {
         return menu
     }
 
+    /// シェルが終了したとき、Terminal.app と同じようにその旨を画面に残す。
+    /// exit だけでなく、シェルが落ちた場合や Ctrl-D でもここを通る。
+    ///
+    /// 画面は消さない。直前の出力（落ちた原因のエラーなど）が読めなくなるのが一番困るからだ。
+    public override func processTerminated(_ source: LocalProcess, exitCode: Int32?) {
+        super.processTerminated(source, exitCode: exitCode)
+
+        // send ではなく feed を使う。send は pty の向こう側へ送る経路だが、
+        // プロセスはもう死んでいるので誰も受け取らない。feed は端末の表示側に直接書き込む。
+        //
+        // 先頭の改行で一行空ける。zsh は exit 時に logout を名乗って改行するので、
+        // これで Terminal.app と同じ見た目になる。
+        feed(text: "\r\n[\(String(localized: "プロセスが完了しました"))]\r\n")
+    }
+
     // MARK: - テーマ（配色）
 
     /// 現在の見た目モード。適用は applyCurrentTheme() を明示的に呼ぶ
@@ -662,7 +677,7 @@ struct TerminalContainer: NSViewRepresentable {
             }
         }
     }
-    
+
     private func makeBaseEnvironment() -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         env["TERM"] = "xterm-256color"
