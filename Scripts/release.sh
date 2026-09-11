@@ -51,6 +51,26 @@ info() { printf '    %s\n' "$*"; }
 warn() { printf '\033[1;33m警告:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31mエラー:\033[0m %s\n' "$*" >&2; exit 1; }
 
+# create-dmg は作業用に /Volumes/dmg.XXXXX を、仕上げに /Volumes/<volname> を
+# それぞれマウントする。正常終了すれば自分で外すが、途中で落ちると
+# マウントしたまま残る。残骸があると次回は同名ボリュームを掴めずに失敗するし、
+# LaunchServices が消えたボリュームのパスを幽霊レコードとして覚え込む。
+# そうなると Finder が実体の無いアプリを掴んだままになって厄介だ。
+# だから create-dmg の前後で必ず掃除する。
+detach_stale_volumes() {
+	local vol
+	for vol in /Volumes/dmg.* "/Volumes/$APP_NAME"; do
+		# パターンに一致が無ければ glob は展開されず文字列のまま残る。
+		# -d で弾かれるので、その場合は何も起きない。
+		[[ -d "$vol" ]] || continue
+		warn "マウントされたままのボリュームがある: $vol — 外す"
+		if ! hdiutil detach "$vol" -force >/dev/null 2>&1; then
+			warn "外せなかった: $vol"
+			warn "  掴んでいるプロセスを探すなら: lsof +D \"$vol\""
+		fi
+	done
+}
+
 VERSION=""
 NOTES_FILE=""
 AUTO_NOTES=0
@@ -81,6 +101,11 @@ EOF
 # 途中で落ちたとき、バージョン変更だけが残るのを防ぐための案内。
 on_exit() {
 	local code=$?
+	# 失敗して抜けるときは、掴んだままのボリュームを置き去りにしない。
+	# --dry-run は「何も変更しない」約束なので対象外にする。
+	if [[ $code -ne 0 && $DRY_RUN -eq 0 ]]; then
+		detach_stale_volumes
+	fi
 	if [[ $code -ne 0 && $VERSION_BUMPED -eq 1 && $COMMITTED -eq 0 ]]; then
 		warn "途中で失敗した。バージョンの変更を戻すなら:"
 		warn "  git -C \"$REPO_ROOT\" checkout -- \"$PBXPROJ\""
@@ -276,6 +301,8 @@ info "OK"
 
 step "DMG を作る"
 rm -f "$DMG"
+# 前回の残骸が残っていると、同名ボリュームを掴めずにここで失敗する。
+detach_stale_volumes
 create-dmg \
 	--volname "$APP_NAME" \
 	--window-pos 200 120 \
