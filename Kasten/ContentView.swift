@@ -134,9 +134,13 @@ struct ContentView: View {
         // キーボードショートカット（不可視ボタンで実装）
         .background {
             Group {
-                Button("") {
+                // ラベルは Text(verbatim:) にする。Button("") だと空文字列が
+                // ローカライズ対象として文字列カタログに抽出されてしまう。
+                Button {
                     let snapshot = bridge.snapshotVisibleText()
                     Task { await viewModel.analyzeTerminal(snapshot: snapshot) }
+                } label: {
+                    Text(verbatim: "")
                 }
                 .keyboardShortcut("e", modifiers: .command)
             }
