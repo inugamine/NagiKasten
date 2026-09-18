@@ -493,23 +493,6 @@
         }
       }
     },
-    "ダークから複製" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Duplicate from Dark"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ダークから複製"
-          }
-        }
-      }
-    },
     "ターミナルに解析できる内容がありません。" : {
       "localizations" : {
         "en" : {
@@ -738,23 +721,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ライト"
-          }
-        }
-      }
-    },
-    "ライトから複製" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Duplicate from Light"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ライトから複製"
           }
         }
       }
