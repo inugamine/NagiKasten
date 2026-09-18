@@ -113,6 +113,11 @@ struct ContentView: View {
             bridge.onAIQuery = { question in
                 Task { await viewModel.askAI(question) }
             }
+
+            // "?" が打たれた時点でモデルの読み込みを始めておく
+            bridge.onAIComposing = {
+                Task { @MainActor in viewModel.prewarmAI() }
+            }
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {

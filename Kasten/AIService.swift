@@ -27,32 +27,10 @@ final class AIService: ObservableObject {
     }
 
     /// 動作中のオンデバイスモデルの表示名（"AFM 3 Core" など）。
-    /// macOS 27 から取れるようになった。設定画面などに出す用。
-    var modelDisplayName: String? {
-        guard #available(macOS 27.0, *) else { return nil }
-        return model.variant.displayName
-    }
+    var modelDisplayName: String? { AIModelStatus.displayName }
 
     /// 利用不可の理由（UI 表示用）。利用可能なら nil。
-    var unavailableReason: String? {
-        switch model.availability {
-        case .available:
-            return nil
-        case .unavailable(let reason):
-            switch reason {
-            case .deviceNotEligible:
-                return String(localized: "この Mac は Apple Intelligence に対応していません。")
-            case .appleIntelligenceNotEnabled:
-                return String(localized: "設定から Apple Intelligence を有効にしてください。")
-            case .modelNotReady:
-                return String(localized: "モデルを準備中です。しばらく待ってから再度お試しください。")
-            @unknown default:
-                return String(localized: "Apple Intelligence が利用できません。")
-            }
-        @unknown default:
-            return String(localized: "Apple Intelligence が利用できません。")
-        }
-    }
+    var unavailableReason: String? { AIModelStatus.unavailableReason }
 
     // MARK: - 回答言語の決定
 
@@ -246,7 +224,31 @@ final class AIService: ObservableObject {
         guard isAvailable else { throw AIServiceError.modelUnavailable }
 
         let language = Self.responseLanguageName(for: naturalLanguage)
-        let instructions = """
+        let instructions = Self.suggestionInstructions(language: language)
+        let tools = Self.suggestionTools()
+
+        let budget = await inputBudget(instructions: instructions, usesTools: true)
+        let trimmed = await fitted(naturalLanguage, within: budget)
+
+        // prewarm 済みのセッションが同じ条件で作られていれば、それをそのまま使う。
+        // 条件が食い違う（想定と違う言語で聞かれた）ときは捨てて作り直す。
+        // どちらにせよモデル本体の読み込みは済んでいるので、無駄にはならない。
+        let reusable = (prewarmedInstructions == instructions) ? prewarmedSession : nil
+        prewarmedSession = nil
+        prewarmedInstructions = nil
+
+        return try await respond(
+            to: trimmed,
+            instructions: instructions,
+            tools: tools,
+            reusing: reusable,
+            generating: CommandSuggestion.self
+        )
+    }
+
+    /// サジェスト用の instructions。prewarm と本番で同一の文字列を作る必要があるので関数に切り出す。
+    private static func suggestionInstructions(language: String) -> String {
+        """
         You are an assistant well-versed in the macOS terminal.
         The user describes what they want to do; propose an appropriate shell command to achieve it.
         - Put the command to run on a single line in `command`. If multiple steps are required, join them with &&.
@@ -256,23 +258,54 @@ final class AIService: ObservableObject {
         - Use `lookupManPage` to confirm option syntax rather than guessing.
         - Always write `explanation` and `warning` in \(language).
         """
+    }
 
-        // 履歴ツールは既定で無効。有効なときだけ渡す。
-        // 無効なまま渡してもモデルが呼んで断られるだけで、その往復がコンテキストの無駄になる。
+    /// サジェスト用のツール一式。
+    /// 履歴ツールは既定で無効で、有効なときだけ渡す。
+    /// 無効なまま渡してもモデルが呼んで断られるだけで、その往復がコンテキストの無駄になる。
+    private static func suggestionTools() -> [any Tool] {
         var tools: [any Tool] = [CommandAvailabilityTool(), ManPageTool()]
         if ShellHistoryTool.isEnabled {
             tools.append(ShellHistoryTool())
         }
+        return tools
+    }
 
-        let budget = await inputBudget(instructions: instructions, usesTools: true)
-        let trimmed = await fitted(naturalLanguage, within: budget)
+    // MARK: - 事前ロード
 
-        return try await respond(
-            to: trimmed,
-            instructions: instructions,
-            tools: tools,
-            generating: CommandSuggestion.self
-        )
+    /// prewarm 済みのサジェスト用セッション。次の suggestCommand で使い回す。
+    private var prewarmedSession: LanguageModelSession?
+    /// 上のセッションを作ったときの instructions。使い回してよいかの判定に使う。
+    private var prewarmedInstructions: String?
+
+    /// モデルの読み込みを先に始めておく。ターミナルで "?" が打たれた時点で呼ぶ想定。
+    ///
+    /// Apple は「respond まで 1 秒以上の猶予があるときだけ使え」と言っている。
+    /// "?" を打った直後なら、ユーザーはこれから質問文を打つので確実にその猶予がある。
+    ///
+    /// 言語はまだ質問文が無いので OS の優先言語で組み立てる。
+    /// 実際の質問が別言語だった場合はセッションを捨てて作り直すが、
+    /// モデル本体の読み込みは済んでいるので損はしない。
+    ///
+    /// セッションを使い回すのは **prewarm 直後の 1 回だけ** に限る。
+    /// 使い回しを続けると transcript が伸びてコンテキストを圧迫し、
+    /// トークン予算の計算（空の transcript を前提にしている）が崩れる。
+    func prewarmSuggestion() {
+        guard isAvailable, prewarmedSession == nil else { return }
+
+        let instructions = Self.suggestionInstructions(language: Self.responseLanguageName())
+        let session = LanguageModelSession(tools: Self.suggestionTools(), instructions: instructions)
+        session.prewarm()
+
+        prewarmedSession = session
+        prewarmedInstructions = instructions
+    }
+
+    /// 保持している prewarm 済みセッションを破棄する。
+    /// 質問が取り消された（パネルを閉じた、行を消した）ときに呼ぶ。
+    func discardPrewarmedSession() {
+        prewarmedSession = nil
+        prewarmedInstructions = nil
     }
 
     // MARK: - 応答の共通処理
@@ -286,10 +319,11 @@ final class AIService: ObservableObject {
         to prompt: String,
         instructions: String,
         tools: [any Tool],
+        reusing prewarmed: LanguageModelSession? = nil,
         generating type: Content.Type
     ) async throws -> Content {
         do {
-            let session = LanguageModelSession(tools: tools, instructions: instructions)
+            let session = prewarmed ?? LanguageModelSession(tools: tools, instructions: instructions)
             let response = try await session.respond(to: prompt, generating: type)
             return response.content
         } catch is LanguageModelSession.ToolCallError {
@@ -338,6 +372,51 @@ enum AIServiceError: LocalizedError {
             return String(localized: "Apple Intelligence が利用できません。設定から有効にしてください。")
         case .contextTooSmall:
             return String(localized: "解析できる内容が残りませんでした。ターミナルの表示を減らしてからお試しください。")
+        }
+    }
+}
+
+// MARK: - モデルの状態
+
+/// モデルの可用性と種別を、AIService のインスタンス無しに参照するための入り口。
+///
+/// 設定画面は ContentView が持つ ViewModel に触れないので、
+/// 状態の問い合わせだけはここに寄せて二重定義を避ける。
+@MainActor
+enum AIModelStatus {
+
+    private static var model: SystemLanguageModel { .default }
+
+    static var isAvailable: Bool { model.isAvailable }
+
+    /// 動作中のオンデバイスモデルの表示名（"AFM 3 Core" など）。
+    /// macOS 27 から取れるようになった。それ以前は名前を出す手段が無いので nil。
+    static var displayName: String? {
+        guard #available(macOS 27.0, *) else { return nil }
+        return model.variant.displayName
+    }
+
+    /// モデルが扱えるコンテキスト長（トークン数）。
+    static var contextSize: Int { model.contextSize }
+
+    /// 利用不可の理由（UI 表示用）。利用可能なら nil。
+    static var unavailableReason: String? {
+        switch model.availability {
+        case .available:
+            return nil
+        case .unavailable(let reason):
+            switch reason {
+            case .deviceNotEligible:
+                return String(localized: "この Mac は Apple Intelligence に対応していません。")
+            case .appleIntelligenceNotEnabled:
+                return String(localized: "設定から Apple Intelligence を有効にしてください。")
+            case .modelNotReady:
+                return String(localized: "モデルを準備中です。しばらく待ってから再度お試しください。")
+            @unknown default:
+                return String(localized: "Apple Intelligence が利用できません。")
+            }
+        @unknown default:
+            return String(localized: "Apple Intelligence が利用できません。")
         }
     }
 }

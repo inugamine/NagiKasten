@@ -12,12 +12,17 @@ import FoundationModels
 
 /// AI ツールから外部コマンドを叩くための最小限のランナー。
 ///
+/// このプロジェクトは `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` でビルドされるため、
+/// 注釈の無い型は暗黙に `@MainActor` になる。ここはメインアクタで動かしてはいけない
+/// （プロセスの起動待ちで UI が止まる）ので、明示的に `nonisolated` を付けている。
+/// 以降の Tool 群と `CommandName` も同じ理由。
+///
 /// ここで一番大事なのは **シェルを経由しない** こと。
 /// 引数はモデルが生成した文字列なので、`sh -c` に渡すと
 /// `foo; rm -rf ~` のような文字列がそのまま実行されてしまう。
 /// `Process` に argv を直接渡せばメタ文字は単なる文字として扱われ、
 /// この経路自体が成立しない。
-enum ProcessRunner {
+nonisolated enum ProcessRunner {
 
     enum Failure: Error {
         case timedOut
@@ -108,7 +113,7 @@ enum ProcessRunner {
 
 // MARK: - 引数の検証
 
-enum CommandName {
+nonisolated enum CommandName {
 
     /// モデルが渡してきた文字列をコマンド名として受け入れてよいか判定する。
     ///
@@ -138,7 +143,7 @@ enum CommandName {
 /// man ページを丸ごと返すと一撃で溢れる。
 /// ここでは「キーワードがあれば該当行の周辺、なければ NAME と SYNOPSIS」
 /// という方針で削ってから返す。
-struct ManPageTool: Tool {
+nonisolated struct ManPageTool: Tool {
     let name = "lookupManPage"
     let description = "Looks up the manual page for a command installed on this Mac."
 
@@ -285,7 +290,7 @@ struct ManPageTool: Tool {
 /// モデルの記憶にあるコマンドと、目の前の Mac に入っているコマンドは別物だ。
 /// `gsed` や `rg` や `fd` を平然と提案されても、入っていなければ意味がない。
 /// これがあると「入っている方」で答えられる。
-struct CommandAvailabilityTool: Tool {
+nonisolated struct CommandAvailabilityTool: Tool {
     let name = "checkCommandAvailability"
     let description = "Checks which of the given commands are actually installed on this Mac."
 
@@ -326,7 +331,7 @@ struct CommandAvailabilityTool: Tool {
 /// 社内ホスト名のような外に出したくないものが普通に混ざる。
 /// オンデバイスモデルとはいえ、黙って読ませるものではないので
 /// 明示的に有効化したときだけ動かす。
-struct ShellHistoryTool: Tool {
+nonisolated struct ShellHistoryTool: Tool {
     let name = "searchShellHistory"
     let description = "Searches the user's zsh history for previously used commands."
 

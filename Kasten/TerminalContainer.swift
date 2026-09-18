@@ -21,6 +21,10 @@ final class TerminalBridge: ObservableObject {
 
     /// AI質問と判定されたとき、質問文を受け取るコールバック。
     var onAIQuery: ((String) -> Void)?
+
+    /// 行頭に AI トリガー(?/？)が打たれた時点で一度だけ呼ばれる。
+    /// モデルの事前読み込みを始めるための合図。
+    var onAIComposing: (() -> Void)?
     
     /// ターミナルに文字列を送り込む（実行はuser任せ、末尾に改行は付けない）
     func sendToTerminal(_ text: String) {
@@ -115,6 +119,10 @@ final class KastenTerminalView: LocalProcessTerminalView {
     /// AI質問と判定したとき、質問文を外へ渡すコールバック
     var onAIQuery: ((String) -> Void)?
 
+    /// 行頭に AI トリガー(?/？)が打たれた時点で一度だけ呼ばれる。
+    /// モデルの事前読み込みを始めるための合図。
+    var onAIComposing: (() -> Void)?
+
     /// コマンド境界の「スクロール不変の絶対行」を記録する。
     /// 各要素は (絶対行, 直前コマンドの終了コード)。
     private var blockBoundaries: [(absoluteRow: Int, exitCode: Int?)] = []
@@ -133,6 +141,8 @@ final class KastenTerminalView: LocalProcessTerminalView {
     /// 矢印キーで途中に戻って修正してもバッファが画面と一致する。
     /// 文字の蓄積は insertText に一本化し、send は制御キーだけ扱う。
     private var lineBuffer: [Character] = []
+    /// 現在の入力行で prewarm の合図を出したか。行が変わるたびに落とす。
+    private var hasSignalledAIComposing = false
     /// カーソル位置（0〜lineBuffer.count）。文字はこの位置に挿入される。
     private var cursorIndex: Int = 0
 
@@ -514,12 +524,25 @@ final class KastenTerminalView: LocalProcessTerminalView {
         } else {
             text = ""
         }
+        // 挿入前に空なら新しい行の始まり。
+        // 行がクリアされる箇所（Enter / Ctrl-U / Ctrl-C / 履歴呼び出し）を
+        // 個別に拾うより、ここで一括して判定する方が取りこぼしがない。
+        if lineBuffer.isEmpty { hasSignalledAIComposing = false }
+
         // カーソル位置に1文字ずつ挿入していく
         for ch in text {
             let idx = min(max(cursorIndex, 0), lineBuffer.count)
             lineBuffer.insert(ch, at: idx)
             cursorIndex = idx + 1
         }
+
+        // 行頭が ?/？ になった瞬間に、モデルの読み込みを先に始めさせる。
+        // ここから質問文を打ち終えるまでの間が、そのまま prewarm の猶予になる。
+        if !hasSignalledAIComposing, startsWithAITrigger(String(lineBuffer)) {
+            hasSignalledAIComposing = true
+            onAIComposing?()
+        }
+
         super.insertText(string, replacementRange: replacementRange)
     }
 
@@ -633,6 +656,10 @@ struct TerminalContainer: NSViewRepresentable {
         // AI質問と判定された入力をブリッジ経由で ViewModel に流す
         terminal.onAIQuery = { [weak bridge] question in
             bridge?.onAIQuery?(question)
+        }
+
+        terminal.onAIComposing = { [weak bridge] in
+            bridge?.onAIComposing?()
         }
         
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"

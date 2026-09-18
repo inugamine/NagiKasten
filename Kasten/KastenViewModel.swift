@@ -39,6 +39,12 @@ final class KastenViewModel: ObservableObject {
     /// 回答パネルを表示するか
     @Published var isAnswerPanelVisible: Bool = false
 
+    /// ターミナルで AI質問を打ち始めたときに呼ばれる。モデルの読み込みを先に始める。
+    /// 実際に質問が飛んでくるまでの入力時間が、そのまま読み込みの猶予になる。
+    func prewarmAI() {
+        aiService.prewarmSuggestion()
+    }
+
     /// ターミナルで AI質問と判定された入力を受けて、コマンドを提案させる。
     func askAI(_ question: String) async {
         let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -66,6 +72,8 @@ final class KastenViewModel: ObservableObject {
         }
         aiSuggestion = nil
         aiQuestion = ""
+        // 使われなかった prewarm 済みセッションを抱えたままにしない。
+        aiService.discardPrewarmedSession()
     }
 
     // MARK: - エラー解析

@@ -11,6 +11,9 @@ import AppKit
 struct SettingsView: View {
     @EnvironmentObject private var themeStore: ThemeStore
 
+    /// シェル履歴をAIに読ませるか。既定はオフ。
+    @AppStorage(ShellHistoryTool.enabledDefaultsKey) private var isHistoryToolEnabled = false
+
     /// ANSI 16 色の表示名（0..15）。
     private let ansiLabels: [LocalizedStringKey] = [
         "黒", "赤", "緑", "黄", "青", "マゼンタ", "シアン", "白",
@@ -23,6 +26,10 @@ struct SettingsView: View {
             appearanceTab
                 .tabItem {
                     Label("外観", systemImage: "paintbrush")
+                }
+            aiTab
+                .tabItem {
+                    Label("AI", systemImage: "sparkles")
                 }
         }
         .frame(width: 480, height: 460)
@@ -44,6 +51,53 @@ struct SettingsView: View {
 
                 if themeStore.mode == .custom {
                     customColorEditor
+                }
+            }
+            .padding()
+        }
+    }
+
+    // MARK: - AI
+
+    private var aiTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                sectionBox("モデル") {
+                    LabeledContent("状態") {
+                        if let reason = AIModelStatus.unavailableReason {
+                            Text(reason)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.trailing)
+                        } else {
+                            Label("利用可能", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        }
+                    }
+
+                    // モデル名が取れるのは macOS 27 から。
+                    // それ以前は名前を出す手段が無いので、行ごと隠す。
+                    if let name = AIModelStatus.displayName {
+                        LabeledContent("種別", value: name)
+                    }
+
+                    LabeledContent("コンテキスト長") {
+                        Text(verbatim: "\(AIModelStatus.contextSize) tokens")
+                            .monospacedDigit()
+                    }
+                }
+
+                sectionBox("ツール") {
+                    Text("AIは man ページの参照と、コマンドが実際にこの Mac に入っているかの確認ができます。これらは常に有効です。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Divider()
+
+                    Toggle("シェル履歴の参照を許可する", isOn: $isHistoryToolEnabled)
+
+                    Text("過去に実行したコマンドを AI が検索できるようになり、提案の精度が上がります。ただし履歴には API キーやホスト名など、見せたくない内容が混ざっていることがあります。処理はすべてこの Mac の中で完結し、外部には送信されません。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             .padding()
